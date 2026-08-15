@@ -1,128 +1,88 @@
-#include "nz/zstd_engine.hpp"
-#include "nz/checksum.hpp"
+#include "nz/stream_engine.hpp"
 
-#include <fstream>
 #include <iostream>
-#include <vector>
 #include <string>
 
 int main(int argc, char* argv[]) {
 
-    if (argc != 3) {
+    if (argc < 2) {
         std::cerr
-            << "Usage: nzcompress <input> <output.nz>\n";
+            << "Super File Compressor - NZ v0.2\n\n"
+            << "Usage:\n"
+            << "  nzcompress <input> <output.nz>\n"
+            << "  nzextract  <input.nz> <output>\n";
 
         return 1;
     }
 
-    const std::string input_path = argv[1];
-    const std::string output_path = argv[2];
-
-    std::ifstream input(
-        input_path,
-        std::ios::binary
-    );
-
-    if (!input) {
-        std::cerr << "Cannot open input file.\n";
-        return 1;
-    }
-
-    input.seekg(0, std::ios::end);
-
-    const std::streamsize size = input.tellg();
-
-    input.seekg(0, std::ios::beg);
-
-    if (size < 0) {
-        std::cerr << "Invalid input size.\n";
-        return 1;
-    }
-
-    std::vector<std::uint8_t> data(
-        static_cast<std::size_t>(size)
-    );
-
-    input.read(
-        reinterpret_cast<char*>(data.data()),
-        size
-    );
-
-    if (!input) {
-        std::cerr << "Failed to read input file.\n";
-        return 1;
-    }
+    const std::string command = argv[1];
 
     try {
 
-        const auto compressed =
-            nz::ZstdEngine::compress(
-                data.data(),
-                data.size(),
-                3
-            );
+        if (command == "compress") {
 
-        const auto checksum =
-            nz::checksum64(
-                data.data(),
-                data.size()
-            );
+            if (argc != 4) {
+                std::cerr
+                    << "Usage: nzcompress compress "
+                    << "<input> <output.nz>\n";
 
-        std::ofstream output(
-            output_path,
-            std::ios::binary
-        );
+                return 1;
+            }
 
-        if (!output) {
-            std::cerr << "Cannot create output file.\n";
-            return 1;
+            const auto stats =
+                nz::compress_file(
+                    argv[2],
+                    argv[3]
+                );
+
+            std::cout
+                << "NZ compression successful\n"
+                << "Original:   "
+                << stats.original_size
+                << " bytes\n"
+                << "Compressed: "
+                << stats.compressed_size
+                << " bytes\n"
+                << "Chunks:     "
+                << stats.chunk_count
+                << '\n';
+
+            return 0;
         }
 
-        const char magic[4] = {'N', 'Z', '0', '1'};
+        if (command == "extract") {
 
-        std::uint64_t original_size = data.size();
-        std::uint64_t compressed_size = compressed.size();
+            if (argc != 4) {
+                std::cerr
+                    << "Usage: nzcompress extract "
+                    << "<input.nz> <output>\n";
 
-        output.write(magic, 4);
+                return 1;
+            }
 
-        output.write(
-            reinterpret_cast<const char*>(&original_size),
-            sizeof(original_size)
-        );
+            nz::decompress_file(
+                argv[2],
+                argv[3]
+            );
 
-        output.write(
-            reinterpret_cast<const char*>(&compressed_size),
-            sizeof(compressed_size)
-        );
+            std::cout
+                << "NZ extraction successful\n";
 
-        output.write(
-            reinterpret_cast<const char*>(&checksum),
-            sizeof(checksum)
-        );
-
-        output.write(
-            reinterpret_cast<const char*>(compressed.data()),
-            compressed.size()
-        );
-
-        output.close();
-
-        std::cout
-            << "NZ compression successful\n"
-            << "Original:   "
-            << original_size
-            << " bytes\n"
-            << "Compressed: "
-            << compressed_size
-            << " bytes\n";
-
-        return 0;
-
-    } catch (const std::exception& e) {
+            return 0;
+        }
 
         std::cerr
-            << "Compression error: "
-            << e.what()
+            << "Unknown command: "
+            << command
+            << '\n';
+
+        return 1;
+
+    } catch (const std::exception& error) {
+
+        std::cerr
+            << "ERROR: "
+            << error.what()
             << '\n';
 
         return 1;
