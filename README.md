@@ -10,14 +10,15 @@ SuperFileCompressor is the native C++ implementation of the **NZ** archive forma
 - Store original size, compressed size, chunk count, and checksums in the archive header.
 - Verify every decompressed chunk before writing it.
 - Verify the final reconstructed size and whole-file checksum after extraction.
+- Use the included desktop GUI to select files, choose operations, monitor output, and verify results.
 
 ## Requirements — Kali Linux / Debian / Ubuntu
 
-Install the compiler, CMake, pkg-config, Zstandard development files, and xxHash development files:
+Install the compiler, CMake, pkg-config, Zstandard development files, xxHash development files, and Tkinter for the desktop GUI:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake pkg-config libzstd-dev libxxhash-dev
+sudo apt install -y build-essential cmake pkg-config libzstd-dev libxxhash-dev python3-tk
 ```
 
 The project requires C++20 and CMake 3.20 or newer.
@@ -39,7 +40,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ```
 
-The executable will be created at:
+The native executable will be created at:
 
 ```text
 build/nzcompress
@@ -51,7 +52,39 @@ Check that it starts:
 ./build/nzcompress
 ```
 
-## Basic test
+## Desktop GUI
+
+The repository includes a dependency-light Tkinter GUI at `gui/nzgui.py`. The GUI delegates all archive work to the native C++ engine, so the GUI and CLI use the same NZ implementation.
+
+Start it from the project root:
+
+```bash
+python3 gui/nzgui.py
+```
+
+The GUI provides:
+
+- Compress → `.nz`
+- Extract `.nz`
+- File picker for input and output
+- Automatic output-name suggestions
+- Overwrite confirmation
+- Operation log
+- Background execution so the window remains responsive
+- Output-folder opener
+- Basic result verification/information
+- Automatic discovery of `build/nzcompress`
+
+If the GUI says the NZ engine cannot be found, build the C++ target first:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+```
+
+Then start the GUI again.
+
+## Basic CLI test
 
 Create a test file:
 
@@ -94,9 +127,27 @@ sha256sum test-local.txt restored-local.txt
 
 Both hashes must be identical.
 
+## GUI test
+
+After building:
+
+```bash
+python3 gui/nzgui.py
+```
+
+1. Select **Compress → .nz**.
+2. Choose `test.txt` or another test file.
+3. Confirm the suggested `.nz` destination.
+4. Click **Start Compression**.
+5. Switch to **Extract .nz**.
+6. Select the generated archive.
+7. Choose a restored-file destination.
+8. Click **Start Extraction**.
+9. Compare the original and restored files with `cmp` or SHA-256.
+
 ## Test the repository sample
 
-The repository already contains `test.txt` and sample `.nz` files. To perform a fresh round trip without overwriting the tracked samples:
+The repository contains `test.txt` and sample `.nz` files. To perform a fresh round trip without overwriting the tracked samples:
 
 ```bash
 ./build/nzcompress compress test.txt test-local.nz
@@ -184,18 +235,20 @@ The format is intentionally stream-oriented so large files can be processed with
 
 ### `Package 'libzstd' ... not found`
 
-Install the Zstandard development package:
-
 ```bash
 sudo apt install -y libzstd-dev
 ```
 
 ### `Package 'libxxhash' ... not found`
 
-Install the xxHash development package:
-
 ```bash
 sudo apt install -y libxxhash-dev
+```
+
+### `No module named tkinter`
+
+```bash
+sudo apt install -y python3-tk
 ```
 
 ### `cmake: command not found`
@@ -212,8 +265,6 @@ sudo apt install -y build-essential
 
 ### Build is using stale files
 
-Do a clean configure/build:
-
 ```bash
 rm -rf build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -224,4 +275,4 @@ cmake --build build -j"$(nproc)"
 
 The archive format and compression engine are still under active development. Do not assume NZ v0.2 archives will remain byte-compatible with future format versions until a stable format specification is published.
 
-For repository security, do not commit credentials, API keys, private keys, or other secrets. GitHub recommends using repository security features such as secret scanning and push protection where available.
+For repository security, do not commit credentials, API keys, private keys, or other secrets.
