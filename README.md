@@ -1,227 +1,103 @@
 # SuperFileCompressor
 
-SuperFileCompressor is the native C++ implementation of the **NZ** archive format. The current v0.2 engine uses Zstandard for compression and XXH64 for per-chunk and whole-file integrity verification.
+SuperFileCompressor is the native C++ implementation of the **NZ** archive format. The stable engine currently writes NZ02 archives using Zstandard compression and XXH64 integrity verification. **NZ v3** adds a desktop GUI, File menu, toolbar, Help/About dialogs, verification, and a password-key preparation panel.
 
-## Current capabilities
+## NZ v3 desktop features
 
-- Compress a file into an `.nz` archive.
-- Extract an `.nz` archive back to its original file.
-- Stream the input in chunks instead of loading the complete file into memory.
-- Store original size, compressed size, chunk count, and checksums in the archive header.
-- Verify every decompressed chunk before writing it.
-- Verify the final reconstructed size and whole-file checksum after extraction.
+- Compress files to `.nz`.
+- Extract `.nz` archives.
+- File menu and toolbar.
+- Browse input/output paths.
+- Output-folder launcher.
+- Operation log and verification.
+- Password + confirmation fields.
+- Deterministic v3 password-key fingerprint generation.
+- Passwords are not written to logs or saved to disk.
+- Windows x64 PyInstaller release workflow.
 
-## Requirements — Kali Linux / Debian / Ubuntu
+### Password protection status
 
-Install the compiler, CMake, pkg-config, Zstandard development files, and xxHash development files:
+The current NZ02 archive format is **not encrypted**. The v3 password panel derives a key fingerprint for the planned authenticated-encryption format; it does not pretend that a normal NZ02 archive is password protected. The next archive-format generation should use a per-archive random salt and authenticated encryption rather than a universal static salt or plain password hash.
+
+## Linux requirements
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake pkg-config libzstd-dev libxxhash-dev
+sudo apt install -y build-essential cmake pkg-config libzstd-dev libxxhash-dev python3-tk
 ```
 
-The project requires C++20 and CMake 3.20 or newer.
-
-## Build from GitHub
-
-Clone the repository and enter it:
+## Build the native engine
 
 ```bash
 git clone https://github.com/neoe974-tech/SuperFileCompressor.git
 cd SuperFileCompressor
-```
-
-Create a clean build directory:
-
-```bash
 rm -rf build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ```
 
-The executable will be created at:
-
-```text
-build/nzcompress
-```
-
-Check that it starts:
+## Run NZ v3 GUI
 
 ```bash
-./build/nzcompress
+python3 gui/nzgui.py
 ```
 
-## Basic test
+The GUI automatically looks for `build/nzcompress`.
 
-Create a test file:
-
-```bash
-printf 'SuperFileCompressor NZ test file\n' > test-local.txt
-```
-
-Compress it:
-
-```bash
-./build/nzcompress compress test-local.txt test-local.nz
-```
-
-Expected output is similar to:
-
-```text
-NZ compression successful
-Original:   34 bytes
-Compressed: <size> bytes
-Chunks:     1
-```
-
-Extract it:
-
-```bash
-./build/nzcompress extract test-local.nz restored-local.txt
-```
-
-Verify the extracted file is identical to the original:
-
-```bash
-cmp test-local.txt restored-local.txt && echo 'ROUND-TRIP OK'
-```
-
-You can also compare SHA-256 hashes:
-
-```bash
-sha256sum test-local.txt restored-local.txt
-```
-
-Both hashes must be identical.
-
-## Test the repository sample
-
-The repository already contains `test.txt` and sample `.nz` files. To perform a fresh round trip without overwriting the tracked samples:
-
-```bash
-./build/nzcompress compress test.txt test-local.nz
-./build/nzcompress extract test-local.nz restored-local.txt
-cmp test.txt restored-local.txt && echo 'ROUND-TRIP OK'
-```
-
-## Large-file test
-
-Generate a larger file locally:
-
-```bash
-dd if=/dev/urandom of=large-test.bin bs=1M count=128 status=progress
-```
-
-Compress:
-
-```bash
-./build/nzcompress compress large-test.bin large-test.nz
-```
-
-Extract:
-
-```bash
-./build/nzcompress extract large-test.nz large-test-restored.bin
-```
-
-Verify:
-
-```bash
-cmp large-test.bin large-test-restored.bin && echo 'LARGE FILE ROUND-TRIP OK'
-```
-
-Remove temporary test files when finished:
-
-```bash
-rm -f test-local.txt test-local.nz restored-local.txt large-test.bin large-test.nz large-test-restored.bin
-```
-
-## Command reference
-
-### Compress
+## CLI
 
 ```bash
 ./build/nzcompress compress <input-file> <output.nz>
-```
-
-Example:
-
-```bash
-./build/nzcompress compress photo.jpg photo.nz
-```
-
-### Extract
-
-```bash
 ./build/nzcompress extract <input.nz> <output-file>
 ```
 
-Example:
+## Round-trip test
 
 ```bash
-./build/nzcompress extract photo.nz photo-restored.jpg
+printf 'SuperFileCompressor NZ v3 test\n' > test-local.txt
+./build/nzcompress compress test-local.txt test-local.nz
+./build/nzcompress extract test-local.nz restored-local.txt
+cmp test-local.txt restored-local.txt && echo 'ROUND-TRIP OK'
+sha256sum test-local.txt restored-local.txt
 ```
 
-## NZ v0.2 format
+## Windows x64 build
 
-The current engine writes the `NZ02` format with:
+The `v3-gui` branch contains `.github/workflows/windows-x64.yml`. It uses a Windows x64 GitHub Actions runner, MSYS2 UCRT64, CMake/Ninja, Zstandard, xxHash, Python x64, and PyInstaller.
 
-- magic: `NZ02`
-- format version: `2`
-- compression method: Zstandard
+To build manually from GitHub Actions, open the **Actions** tab and run **Build Windows x64** with `workflow_dispatch`.
+
+The release artifact is:
+
+```text
+SuperFileCompressor-v3-windows-x64.zip
+```
+
+It contains the Windows x64 GUI executable. The native NZ engine is bundled into the PyInstaller executable.
+
+## NZ02 format
+
+The current engine stores:
+
+- `NZ02` magic/version information
 - chunk size
-- original file size
-- compressed payload size
+- original size
+- compressed payload information
 - whole-file XXH64 checksum
 - chunk count
-- per-chunk compressed size
-- per-chunk uncompressed size
-- per-chunk XXH64 checksum
+- per-chunk compressed/uncompressed sizes
+- per-chunk XXH64 checksums
 
-The format is intentionally stream-oriented so large files can be processed without reading the entire source file into RAM.
+The stream engine processes data in chunks rather than loading the entire source file into RAM.
 
-## Troubleshooting
+## Development roadmap
 
-### `Package 'libzstd' ... not found`
+1. NZ02 compression/extraction — implemented.
+2. Desktop GUI — implemented on the v3 branch.
+3. Windows x64 packaging — implemented as GitHub Actions workflow.
+4. NZ04 password-protected authenticated archive format — next engine milestone.
+5. Multi-file archives and directory support.
+6. Progress/cancellation and archive information panels.
+7. Signed releases and installer.
 
-Install the Zstandard development package:
-
-```bash
-sudo apt install -y libzstd-dev
-```
-
-### `Package 'libxxhash' ... not found`
-
-Install the xxHash development package:
-
-```bash
-sudo apt install -y libxxhash-dev
-```
-
-### `cmake: command not found`
-
-```bash
-sudo apt install -y cmake
-```
-
-### `g++: command not found`
-
-```bash
-sudo apt install -y build-essential
-```
-
-### Build is using stale files
-
-Do a clean configure/build:
-
-```bash
-rm -rf build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j"$(nproc)"
-```
-
-## Development notes
-
-The archive format and compression engine are still under active development. Do not assume NZ v0.2 archives will remain byte-compatible with future format versions until a stable format specification is published.
-
-For repository security, do not commit credentials, API keys, private keys, or other secrets. GitHub recommends using repository security features such as secret scanning and push protection where available.
+Do not assume NZ02 archives will remain byte-compatible with future format versions until the archive specification is frozen.
