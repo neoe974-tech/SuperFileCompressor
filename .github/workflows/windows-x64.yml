@@ -1,0 +1,80 @@
+name: Build Windows x64
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            make
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-zstd
+            mingw-w64-ucrt-x86_64-xxhash
+
+      - name: Build native NZ engine
+        run: |
+          rm -rf build
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+          ./build/nzcompress || true
+
+      - name: Prepare Windows application bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\SuperFileCompressor | Out-Null
+          Copy-Item build\nzcompress.exe dist\SuperFileCompressor\nzcompress.exe
+          Copy-Item gui\nzgui.py dist\SuperFileCompressor\zgui.py
+          $dlls = @(
+            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libstdc++-6.dll",
+            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libgcc_s_seh-1.dll",
+            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libwinpthread-1.dll",
+            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libzstd.dll",
+            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libxxhash.dll"
+          )
+          foreach ($dll in $dlls) { if (Test-Path $dll) { Copy-Item $dll dist\SuperFileCompressor\ } }
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build x64 GUI executable
+        shell: pwsh
+        run: |
+          Set-Location dist\SuperFileCompressor
+          pyinstaller --noconfirm --clean --onefile --windowed --name SuperFileCompressor-v3 zgui.py
+          Copy-Item dist\SuperFileCompressor-v3.exe ..\SuperFileCompressor-v3.exe
+
+      - name: Package x64 release
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\SuperFileCompressor-v3.exe,dist\SuperFileCompressor -DestinationPath SuperFileCompressor-v3-windows-x64.zip
+
+      - name: Upload x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperFileCompressor-v3-windows-x64
+          path: SuperFileCompressor-v3-windows-x64.zip
