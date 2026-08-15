@@ -38,25 +38,11 @@ jobs:
           cmake --build build
           ./build/nzcompress || true
 
-      - name: Prepare Windows application bundle
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist\SuperFileCompressor | Out-Null
-          Copy-Item build\nzcompress.exe dist\SuperFileCompressor\nzcompress.exe
-          Copy-Item gui\nzgui.py dist\SuperFileCompressor\zgui.py
-          $dlls = @(
-            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libstdc++-6.dll",
-            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libgcc_s_seh-1.dll",
-            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libwinpthread-1.dll",
-            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libzstd.dll",
-            "$env:RUNNER_TEMP\msys64\ucrt64\bin\libxxhash.dll"
-          )
-          foreach ($dll in $dlls) { if (Test-Path $dll) { Copy-Item $dll dist\SuperFileCompressor\ } }
-
-      - name: Setup Python
+      - name: Setup Python x64
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          architecture: x64
 
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
@@ -64,14 +50,15 @@ jobs:
       - name: Build x64 GUI executable
         shell: pwsh
         run: |
-          Set-Location dist\SuperFileCompressor
-          pyinstaller --noconfirm --clean --onefile --windowed --name SuperFileCompressor-v3 zgui.py
-          Copy-Item dist\SuperFileCompressor-v3.exe ..\SuperFileCompressor-v3.exe
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name SuperFileCompressor-v3 `
+            --add-binary "build\nzcompress.exe;." `
+            gui\nzgui.py
 
       - name: Package x64 release
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\SuperFileCompressor-v3.exe,dist\SuperFileCompressor -DestinationPath SuperFileCompressor-v3-windows-x64.zip
+          Compress-Archive -Path dist\SuperFileCompressor-v3.exe -DestinationPath SuperFileCompressor-v3-windows-x64.zip
 
       - name: Upload x64 artifact
         uses: actions/upload-artifact@v4
